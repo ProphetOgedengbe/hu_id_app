@@ -1,13 +1,15 @@
-import React, { useState } from "react";
-import { 
-  View, 
-  Image, 
-  TouchableOpacity, 
-  StyleSheet, 
+import React, { useState, useRef } from "react";
+import {
+  View,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
   TouchableWithoutFeedback,
   Text,
   Alert,
   ScrollView,
+  Animated,
+  Easing,
   Dimensions
 } from "react-native";
 import * as ImagePicker from 'expo-image-picker';
@@ -20,35 +22,20 @@ interface ImageState {
 }
 
 export default function App(): JSX.Element {
-  const [showID, setShowID] = useState(false);
   const [isSetupComplete, setIsSetupComplete] = useState(false);
-  const [images, setImages] = useState<ImageState>({
-    mainImage: null,
-    idImage: null
-  });
+  const [images, setImages] = useState<ImageState>({ mainImage: null, idImage: null });
   const [tapCount, setTapCount] = useState(0);
   const [tapTimeout, setTapTimeout] = useState<NodeJS.Timeout | null>(null);
 
-  let lastTap: number | null = null;
+  const lastTapRef = useRef<number | null>(null);
+  const idAnim = useRef(new Animated.Value(-height)).current; // start off-screen
 
-  const handleDoubleTap = () => {
-    const now = Date.now();
-    if (lastTap && now - lastTap < 300) {
-      setShowID(false);
-    }
-    lastTap = now;
-  };
-
+  // Triple-tap to go back to setup
   const handleTripleTap = () => {
     setTapCount(prev => prev + 1);
     if (tapTimeout) clearTimeout(tapTimeout);
-
-    const newTimeout = setTimeout(() => {
-      setTapCount(0);
-    }, 1000);
-
+    const newTimeout = setTimeout(() => setTapCount(0), 1000);
     setTapTimeout(newTimeout);
-
     if (tapCount + 1 >= 3) {
       setIsSetupComplete(false);
       setTapCount(0);
@@ -56,17 +43,41 @@ export default function App(): JSX.Element {
     }
   };
 
+  // Show ID screen with drop-down animation
+  const showIDScreen = () => {
+    Animated.timing(idAnim, {
+      toValue: 0,
+      duration: 400,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  // Hide ID screen instantly
+  const hideIDScreenInstantly = () => {
+    idAnim.setValue(-height);
+  };
+
+  // Double-tap on ID screen to instantly revert
+  const handleDoubleTap = () => {
+    const now = Date.now();
+    if (lastTapRef.current && now - lastTapRef.current < 300) {
+      hideIDScreenInstantly();
+    }
+    lastTapRef.current = now;
+  };
+
+  // Pick image without cropping
   const pickImage = async (type: 'main' | 'id') => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Permission to access camera roll is required.', [{ text: 'OK' }]);
+      Alert.alert('Permission Required', 'Access to photo library is required.', [{ text: 'OK' }]);
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: type === 'main' ? [3, 4] : [4, 3],
+      allowsEditing: false,
       quality: 1,
     });
 
@@ -81,13 +92,12 @@ export default function App(): JSX.Element {
   const takePhoto = async (type: 'main' | 'id') => {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Permission to access camera is required.', [{ text: 'OK' }]);
+      Alert.alert('Permission Required', 'Access to camera is required.', [{ text: 'OK' }]);
       return;
     }
 
     const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: type === 'main' ? [3, 4] : [4, 3],
+      allowsEditing: false,
       quality: 1,
     });
 
@@ -114,78 +124,51 @@ export default function App(): JSX.Element {
   const getImageSource = (type: 'main' | 'id') => {
     const uploadedImage = type === 'main' ? images.mainImage : images.idImage;
     if (uploadedImage) return { uri: uploadedImage };
-    return type === 'main' 
+    return type === 'main'
       ? require("./assets/main_image.jpg")
       : require("./assets/id_image.jpg");
   };
 
   const renderSetupScreen = () => (
     <View style={styles.setupContainer}>
-      <ScrollView 
+      <ScrollView
         style={styles.setupScrollView}
-        contentContainerStyle={styles.setupScrollContent}
-        showsVerticalScrollIndicator={true}
-        bounces={true}
+        contentContainerStyle={{ paddingBottom: 100 }}
       >
         <View style={styles.setupHeader}>
           <Text style={styles.setupTitle}>Welcome to IDApp</Text>
-          <Text style={styles.setupSubtitle}>Customize your images and view instructions</Text>
+          <Text style={styles.setupSubtitle}>Customize your images to get started</Text>
         </View>
 
-        {/* Instructions */}
-        <View style={styles.instructionContainer}>
-          <Text style={styles.instructionTitle}>📖 How to Use the App</Text>
-          <Text style={styles.instructionText}>
-            1. Tap "Main Screen Image" or "ID Screen Image" to choose an image from your library or camera.
-          </Text>
-          <Text style={styles.instructionText}>
-            2. After setup, tap the top-right corner on the main screen to view your ID screen.
-          </Text>
-          <Text style={styles.instructionText}>
-            3. Double-tap anywhere on the ID screen to return to the main screen.
-          </Text>
-          <Text style={styles.instructionText}>
-            4. Triple-tap the top-left corner of the main screen to reopen this setup/settings screen.
-          </Text>
-          <Text style={styles.instructionText}>
-            5. Use the "Reset" buttons in settings to revert images to defaults if needed.
+        <View style={styles.disclaimerContainer}>
+          <Text style={styles.disclaimerTitle}>⚠️ Instructions</Text>
+          <Text style={styles.disclaimerText}>
+            1. Triple-tap top-left to access settings.{"\n"}
+            2. Tap top-right on main screen to view ID.{"\n"}
+            3. Double-tap anywhere on ID screen to return instantly to main.{"\n"}
+            4. Images will appear as-is without cropping.{"\n"}
           </Text>
         </View>
 
         <View style={styles.imageSection}>
           <Text style={styles.sectionTitle}>Main Screen Image</Text>
-          <TouchableOpacity 
-            style={styles.imageUploadArea}
-            onPress={() => showImageOptions('main')}
-          >
-            <Image 
-              source={getImageSource('main')} 
-              style={styles.previewImage} 
-            />
+          <TouchableOpacity style={styles.imageUploadArea} onPress={() => showImageOptions('main')}>
+            <Image source={getImageSource('main')} style={styles.previewImage} resizeMode="contain" />
+            <View style={styles.imageOverlay}><Text style={styles.overlayText}>📷 Tap to Change</Text></View>
           </TouchableOpacity>
         </View>
 
         <View style={styles.imageSection}>
           <Text style={styles.sectionTitle}>ID Screen Image</Text>
-          <TouchableOpacity 
-            style={styles.imageUploadArea}
-            onPress={() => showImageOptions('id')}
-          >
-            <Image 
-              source={getImageSource('id')} 
-              style={styles.previewImage} 
-            />
+          <TouchableOpacity style={styles.imageUploadArea} onPress={() => showImageOptions('id')}>
+            <Image source={getImageSource('id')} style={styles.previewImage} resizeMode="contain" />
+            <View style={styles.imageOverlay}><Text style={styles.overlayText}>🆔 Tap to Change</Text></View>
           </TouchableOpacity>
         </View>
-
-        <View style={styles.bottomSpacer} />
       </ScrollView>
 
       <View style={styles.fixedButtonContainer}>
-        <TouchableOpacity 
-          style={styles.okButton}
-          onPress={() => setIsSetupComplete(true)}
-        >
+        <TouchableOpacity style={styles.okButton} onPress={() => setIsSetupComplete(true)}>
           <Text style={styles.okButtonText}>OK</Text>
         </TouchableOpacity>
       </View>
@@ -196,67 +179,63 @@ export default function App(): JSX.Element {
 
   return (
     <View style={styles.container}>
-      {!showID ? (
-        <>
-          <Image
-            source={getImageSource('main')}
-            style={styles.fullScreenImage}
-          />
-          <TouchableOpacity
-            style={styles.topRightButton}
-            onPress={() => setShowID(true)}
-          >
-            <View style={styles.clickArea} />
-          </TouchableOpacity>
+      <Image source={getImageSource('main')} style={styles.fullScreenImage} resizeMode="cover" />
 
-          <TouchableOpacity
-            style={styles.hiddenTapArea}
-            onPress={handleTripleTap}
-            activeOpacity={1}
-          >
-            <View style={styles.hiddenClickArea} />
-          </TouchableOpacity>
-        </>
-      ) : (
+      <TouchableOpacity style={styles.topRightButton} onPress={showIDScreen}>
+        <View style={styles.clickArea} />
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.hiddenTapArea} onPress={handleTripleTap} activeOpacity={1}>
+        <View style={styles.hiddenClickArea} />
+      </TouchableOpacity>
+
+      {/* Animated ID Screen */}
+      <Animated.View style={[styles.idContainer, { transform: [{ translateY: idAnim }] }]}>
         <TouchableWithoutFeedback onPress={handleDoubleTap}>
-          <View style={styles.idContainer}>
-            <Image
-              source={getImageSource('id')}
-              style={styles.fullScreenImage}
-            />
-          </View>
+          <Image source={getImageSource('id')} style={styles.fullScreenImage} resizeMode="cover" />
         </TouchableWithoutFeedback>
-      )}
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
-  fullScreenImage: { width: "100%", height: "100%", resizeMode: "cover" },
+  fullScreenImage: { width: "100%", height: "100%" },
+
   topRightButton: { position: "absolute", top: 50, right: 20, width: 80, height: 80 },
   clickArea: { flex: 1, backgroundColor: "transparent" },
+
   hiddenTapArea: { position: "absolute", top: 50, left: 20, width: 80, height: 80 },
   hiddenClickArea: { flex: 1, backgroundColor: "transparent" },
-  idContainer: { flex: 1 },
+
+  idContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: width,
+    height: height,
+    zIndex: 10,
+  },
 
   setupContainer: { flex: 1, backgroundColor: "#1a1a1a" },
   setupScrollView: { flex: 1 },
-  setupScrollContent: { paddingBottom: 20 },
   setupHeader: { alignItems: 'center', paddingTop: 50, paddingHorizontal: 20, paddingBottom: 10 },
-  setupTitle: { fontSize: 28, fontWeight: "bold", color: "#ffffff", textAlign: 'center' },
-  setupSubtitle: { fontSize: 16, color: "#cccccc", textAlign: 'center', marginTop: 5 },
+  setupTitle: { fontSize: 28, fontWeight: "bold", color: "#fff", textAlign: 'center' },
+  setupSubtitle: { fontSize: 16, color: "#ccc", textAlign: 'center', marginTop: 5 },
 
-  instructionContainer: { backgroundColor: "#333", margin: 20, padding: 15, borderRadius: 8 },
-  instructionTitle: { fontSize: 18, fontWeight: "bold", color: "#FFD700", marginBottom: 10 },
-  instructionText: { fontSize: 14, color: "#fff", lineHeight: 20, marginBottom: 5 },
+  disclaimerContainer: { backgroundColor: "rgba(255,193,7,0.1)", borderLeftWidth: 4, borderLeftColor: "#FFC107", marginHorizontal: 20, marginVertical: 20, padding: 15, borderRadius: 8 },
+  disclaimerTitle: { fontSize: 16, fontWeight: "bold", color: "#FFC107", marginBottom: 5 },
+  disclaimerText: { fontSize: 14, color: "#fff", lineHeight: 20 },
 
   imageSection: { marginBottom: 40, paddingHorizontal: 20 },
-  sectionTitle: { fontSize: 20, fontWeight: "600", color: "#ffffff", marginBottom: 15, textAlign: "center" },
+  sectionTitle: { fontSize: 20, fontWeight: "600", color: "#fff", marginBottom: 15, textAlign: "center" },
   imageUploadArea: { height: 250, borderRadius: 15, overflow: "hidden", position: "relative" },
-  previewImage: { width: "100%", height: "100%", resizeMode: "cover" },
-  bottomSpacer: { height: 20 },
-  fixedButtonContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: "#1a1a1a", paddingTop: 10, paddingBottom: 40, paddingHorizontal: 20, borderTopWidth: 1, borderTopColor: "#333333" },
-  okButton: { backgroundColor: "#34C759", paddingVertical: 12, paddingHorizontal: 30, borderRadius: 12, alignSelf: "center", minWidth: 100 },
-  okButtonText: { color: "#ffffff", fontSize: 16, fontWeight: "bold", textAlign: 'center' },
+  previewImage: { width: "100%", height: "100%" },
+  imageOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.7)", paddingVertical: 12, alignItems: "center" },
+  overlayText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+
+  fixedButtonContainer: { position: 'absolute', bottom: 20, left: 0, right: 0, paddingHorizontal: 20 },
+  okButton: { backgroundColor: "#34C759", paddingVertical: 16, paddingHorizontal: 40, borderRadius: 12, alignSelf: "center", minWidth: 120 },
+  okButtonText: { color: "#fff", fontSize: 18, fontWeight: "bold", textAlign: 'center' },
 });
