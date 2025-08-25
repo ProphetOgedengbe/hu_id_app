@@ -114,3 +114,64 @@ This project is for **prototype/demo purposes only**.
 
 ---
 
+## IDApp Code Breakdown
+
+### **Core Purpose**
+A dual-image display app that mimics an ID presentation system - shows one image normally, reveals a second "ID" image when needed.
+
+### **Main Components**
+
+**State Management:**
+- `isSetupComplete` - toggles between setup screen and main app
+- `images` - stores URIs for main and ID images 
+- `tapCount/tapTimeout` - tracks triple-tap gestures
+- `idAnim` - controls slide-down animation for ID screen
+
+**Key Functions:**
+
+1. **Image Management**
+   - `pickImage()` - selects from photo library
+   - `takePhoto()` - captures with camera
+   - `showImageOptions()` - displays camera/library choice alert
+   - `getImageSource()` - returns uploaded image or default asset
+
+2. **Navigation Controls**
+   - `handleTripleTap()` - triple-tap top-left returns to setup
+   - `showIDScreen()` - tap top-right slides down ID image
+   - `handleDoubleTap()` - double-tap ID screen instantly returns to main
+
+3. **UI Rendering**
+   - `renderSetupScreen()` - configuration interface with image previews
+   - Main screen - fullscreen main image with invisible tap zones
+   - Animated overlay - ID screen slides down from top
+
+### **User Interface Flow**
+
+**Setup Screen:**
+- Welcome text and instructions
+- Two image upload areas with overlay buttons
+- Preview of current images (defaults to bundled assets)
+- OK button to enter main app
+
+**Main Screen:**
+- Fullscreen main image
+- Invisible tap zones: top-left (triple-tap setup), top-right (show ID)
+- Animated ID overlay that slides down when triggered
+
+### **Technical Implementation**
+
+**Dependencies:**
+- React Native core components
+- `expo-image-picker` for camera/gallery access
+- Animated API for smooth transitions
+
+**Assets Required:**
+- `assets/main_image.jpg` - default main screen image
+- `assets/id_image.jpg` - default ID screen image
+
+**Permissions:**
+- Camera access for photo capture
+- Photo library access for image selection
+
+### **Interaction Pattern**
+The app creates a discrete ID presentation system where the primary interface appears as a simple image display, but hidden gestures reveal the secondary ID functionality. The animation system provides smooth transitions while double-tap allows quick concealment of the ID screen.
