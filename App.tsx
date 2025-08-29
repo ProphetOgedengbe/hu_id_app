@@ -7,6 +7,7 @@ import {
   TouchableWithoutFeedback,
   Text,
   Alert,
+  Platform,
   ScrollView,
   Animated,
   Easing,
@@ -110,6 +111,12 @@ export default function App(): JSX.Element {
   };
 
   const showImageOptions = (type: 'main' | 'id') => {
+    if (Platform.OS === 'web') {
+    // Web: skip Alert, open the file picker immediately (keeps user gesture)
+    pickImage(type);
+    return;
+  }
+
     Alert.alert(
       'Select Image',
       `Choose how to add your ${type === 'main' ? 'main' : 'ID'} image:`,
